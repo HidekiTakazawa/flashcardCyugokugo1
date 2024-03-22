@@ -6,9 +6,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>中国語　フラッシュカード</title>
   <style>
+    .header2 {
+
+      display: flex;
+    }
+
+    .linkurl {
+      margin-left: auto;
+    }
+
+    #flash {
+      display: inline-block;
+      width: 170px;
+      height: 40px;
+      cursor: pointer;
+      background-color: skyblue;
+      text-decoration: none;
+      text-align: center;
+      line-height: 50px;
+      border-radius: 6px
+    }
+
     .result {
       font-size: 20px;
       margin-top: 20px;
+
+    }
+
+    #comment {
+      margin-top: 5px;
+      margin-bottom: 5px;
+    }
+
+    #answerInfo {
+      display: flex;
+
+    }
+
+    #answerJp {
+      margin: 0;
+      margin-right: 10px;
+    }
+
+    #answerCh {
+      margin: 0;
+      margin-right: 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #answerPin {
+      margin: 0;
 
     }
 
@@ -51,17 +99,48 @@
 
     }
   </style>
+  <!--  スプレッドシートの情報を読み込むために必要 -->
+  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 </head>
 
 <body>
-  <h3>中国語　フラッシュカード</h3>
-  <img id="flashcard-image" width="300" height="300">
+  <div class="header">
+    <div class="header2">
+      <div class="logo">
+        <h3>中国語　フラッシュカード</h3>
+
+
+      </div>
+
+      <div class="linkurl">
+        <!-- <a id="flash"
+          href="https://script.google.com/macros/s/AKfycbwCL3tny-JoGZehVtlIoO5bAdv5MVrEG88dCRBJmFTwp5cPgYwnhXRgssoVwQmY6f0/exec"
+          target="_blank">語句・本文・文法</a> -->
+        <!-- <a id="ikeda" href="index6.Chinese" target="_blank">使用手引書</a> -->
+
+      </div>
+    </div>
+    <!-- シートセレクトボックス -->
+    <div class="sheetSelect">
+
+      <label for="sheet-select">シート選択：</label><select id="sheet-select" name="sheetSelect"></select>
+    </div>
+  </div>
+
+  <img id="flashcard-image" width="250" height="250">
   <!-- <a href="https://drive.google.com/uc?id=1YiHQP2Nx8JguwgATMclWZI9FsvFhhpgl">yabo</a> -->
   <form class="formDisplay formDisplayNone">
     <input id="answer" type="text">
     <button id="chkInput">check</button>
     <p id="comment"></p>
   </form>
+  <div id="answerInfo">
+    <p id="answerJp"></p>
+    <p id="answerCh" onclick="speakText1(this)"></p>
+    <p id="answerPin"></p>
+
+
+  </div>
   <div id="result" class="result resultNone">正解: 0 回 不正解: 0 回</div>
   <div class="totalGrade totalGradeNoDisplay">
     <p id="totalSeitouritsu"></p>
@@ -69,13 +148,44 @@
 
   </div>
   <script>
-    // 仮のフラッシュカードデータ
-    let flashcards = [
-      { image: 'https://lh3.googleusercontent.com/d/1YiHQP2Nx8JguwgATMclWZI9FsvFhhpgl', word: '鸭脖' },
-      { image: 'https://lh3.googleusercontent.com/d/1SdjLHic6GtFXYxbHUkdLeEeK-7LiFlTa', word: '啤酒花园' },
-      // 他のフラッシュカードを追加...
-    ];
+    let flashcardDatas;  // 全シートのflashdata
+    let flashCards;   // 1シート分のフラッシュカード
+    let answerElement = document.getElementById('answer');
+    let answerJp = document.getElementById('answerJp');
+    let answerCh = document.getElementById('answerCh');
+    let answerPin = document.getElementById('answerPin');
+    // スプレッドシート　単語カード3　gas webアプリ　URL  単語カード3
+    const END_POINT = "https://script.google.com/macros/s/AKfycby18y0HghOzio74ermjxK7dGm8dvuIr3C1YM9YZOwy9-XYI5ovz9zyfxDW241A4uj-X/exec";
+
+    // 非同期処理　すブレッドシートの単語カード読み込み関数
+    // 読み込みが成功すればflashCardsにデータを格納する。
+    function flashcardYomikomi() {
+      $.ajax({
+        type: "GET",
+        url: END_POINT,
+        // data: { sheetNo: SHEET_NO }
+
+      }).done((result) => {        // 成功した時の処理
+        console.log("get done:" + result);
+        setSheetNames(JSON.parse(result)[0]);
+
+        flashcardDatas = JSON.parse(result);
+        flashCards = JSON.parse(result)[1];
+        showFlashcard();
+
+        // flashCards2 = flashcardGenerate(flashCards);
+
+      }).fail((error) => {  // 失敗した時の処理
+        alert('Error:' + JSON.stringify(error));
+
+      }).always((data) => {// 常にやる処理
+        // do something
+        // enableControlElements();
+      });
+    }
+    flashcardYomikomi();  // スプレッドシート読み込み
     const synth = window.speechSynthesis;
+    const sheetSelector = document.getElementById("sheet-select");
     let currentIndex = 0;
     let correctCount = 0;
     let incorrectCount = 0;
@@ -83,35 +193,44 @@
     // 初期化
     let button = document.getElementById('chkInput');
     button.addEventListener('click', checkAnswer);
-    showFlashcard();
 
     // フラッシュカードを表示する関数
     function showFlashcard() {
-      let flashcard = flashcards[currentIndex];
+      let flashcard = flashCards[currentIndex];
       let imgElement = document.getElementById('flashcard-image');
       let comment = document.getElementById('comment');
 
       // 画像と結果をリセット
-      imgElement.src = flashcard.image;
+      imgElement.src = flashcard[4];
       comment.textContent = '';
+      answerJp.textContent = '';
+      answerCh.textContent = '';
+      answerPin.textContent = '';
+      answerElement.value = '';
+      answerElement.focus();
     }
 
     // ユーザーの回答をチェックする関数
     function checkAnswer(e) {
       e.preventDefault();
-      let flashcard = flashcards[currentIndex];
-      let answerElement = document.getElementById('answer');
+      let flashcard = flashCards[currentIndex];
+      
       let comment = document.getElementById('comment');
+
+      answerJp.textContent = flashcard[1];
+      answerCh.textContent = flashcard[2];
+      answerPin.textContent = flashcard[3];
       if (button.textContent === 'check') {
+        speakText2(flashcard[2]);
         button.textContent = 'next';
         // 回答が正しいかどうかをチェック
-        if (flashcard.word === answerElement.value) {
+        if (flashcard[2] === answerElement.value) {
           comment.textContent = '好！赞👍';
           speakText2(comment.textContent);
           console.log('seikai')
           correctCount++;
         } else {
-          comment.textContent = `错×　再加油！！ ${flashcard.word}`;
+          comment.textContent = `错×　再加油！！ ${flashcard[2]}`;
           speakText2(comment.textContent);
           console.log('fuseikai');
           incorrectCount++;
@@ -124,25 +243,25 @@
 
         // 次のフラッシュカードに進む
         currentIndex++;
-        if (currentIndex === flashcards.length) {
-        
+        if (currentIndex === flashCards.length) {
+
           totalGrade.classList.add('totalGradeDisplay');
           totalGrade.classList.remove('totalGradeNoDisplay');
           let totalSeitouritsu = document.getElementById('totalSeitouritsu');
           let totalComment = document.getElementById('totalComment');
-          let mondaisu = flashcards.length;
+          let mondaisu = flashCards.length;
           let ritsu = correctCount * 100 / mondaisu;
           totalSeitouritsu.textContent = `正答数は${correctCount}, 正答率は${ritsu.toFixed(1)}でした。`;
           if (correctCount === mondaisu) {
 
             totalComment.textContent = '恭喜恭喜!!';
-            
+
             speakText2('恭喜恭喜!!');
           } else {
             totalComment.textContent = '';
 
           }
-        
+
 
 
         } else {
@@ -151,9 +270,16 @@
           showFlashcard();
 
         }
-      
+
       }
 
+    }
+    // テキストを音声に変換して再生する関数
+    function speakText1(parm) {
+      let text = parm.textContent;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN'; // 中国語の言語コード
+      synth.speak(utterance);
     }
     // テキストを音声に変換して再生する関数
     function speakText2(text) {
@@ -162,9 +288,44 @@
       utterance.lang = 'zh-CN'; // 中国語の言語コード
       synth.speak(utterance);
     }
-     // 結果を表示する関数
-     function displayResult() {
+    // 結果を表示する関数
+    function displayResult() {
       result.textContent = `正解: ${correctCount} 回 不正解: ${incorrectCount} 回`;
+    }
+    // シート選択されたときの処理
+    let select = document.querySelector('[name="sheetSelect"]');
+
+    select.onchange = event => {
+      var selIndex = select.selectedIndex;
+      sheetIndex = selIndex;
+      console.log(select.selectedIndex);
+
+      flashCards = flashcardDatas[selIndex + 1];
+
+      // flashCards2 = flashcardGenerate(flashCards);
+      currentIndex = 0;
+      correctCount = 0;
+      incorrectCount = 0;
+      button.textContent = 'check';
+      answerElement.value = '';
+      answerElement.focus();
+      showFlashcard();
+      displayResult();
+      // flashcard.textContent = '按下键看单词卡';
+      totalGrade.classList.remove('totalGradeDisplay');
+      totalGrade.classList.add('totalGradeNoDisplay');
+
+    }
+    // シートのセレクトボックス　作成処理
+    function setSheetNames(sheetNamesArray) {
+      sheetSelector.innerChinese = "";
+      document.createElement('option')
+      sheetNamesArray.forEach((sheetName, index) => {
+        let option = document.createElement('option');
+        option.setAttribute('value', index + 1);
+        option.innerHTML = sheetName;
+        sheetSelector.appendChild(option);
+      });
     }
 
 
